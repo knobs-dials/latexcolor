@@ -1,6 +1,6 @@
 # latexcolor
 
-This was an attempt to make latex/pdflatex's ouput readable enough that I wouldn't skim over it.
+This was an attempt to make latex/pdflatex's ouput readable enough that _I would actually read it_.
 
 - Tries to be smart about multiple messages on a line
 - Categorizes messges into initialisation, verbosity, typesetting, warnings/errors, basic messages, and unknown
