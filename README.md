@@ -5,7 +5,7 @@ This was an attempt to make latex/pdflatex's ouput succinct enough that _I would
 - Categorizes messges into initialisation, verbosity, typesetting, warnings/errors, basic messages, and unknown
 - by default surpresses initialisation and verbosity 
 - tries to be smart about splitting when multiple messages are on one line
-- presents each message on its own line, with the page number it's on  (this can be off by one, but is still uesful)
+- presents each message on its own line, with the page number it's on  (this can be off by one, but is still useful)
 
 
 So it shows:
