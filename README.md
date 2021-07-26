@@ -2,10 +2,11 @@
 
 This was an attempt to make latex/pdflatex's ouput readable enough that _I would actually read it_.
 
-- Tries to be smart about multiple messages on a line
 - Categorizes messges into initialisation, verbosity, typesetting, warnings/errors, basic messages, and unknown
 - by default surpresses initialisation and verbosity 
-- presents each message on its own line, with the page number it's probably on
+- tries to be smart about splitting when multiple messages are on one line
+- presents each message on its own line, with the page number it's on  (this can be off by one, but is still uesful)
+
 
 So it shows:
 
