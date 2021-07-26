@@ -1,6 +1,6 @@
 # latexcolor
 
-This was an attempt to make latex/pdflatex's ouput readable enough that _I would actually read it_.
+This was an attempt to make latex/pdflatex's ouput succinct enough that _I would actually read it_.
 
 - Categorizes messges into initialisation, verbosity, typesetting, warnings/errors, basic messages, and unknown
 - by default surpresses initialisation and verbosity 
