@@ -101,7 +101,7 @@ Transcript written on Graph.log.
 ```
 
 
-## Sorry state
+## sorry state
 
 I'm putting it here mainly in case other people have a use for it.
 
