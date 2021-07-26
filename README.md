@@ -100,19 +100,20 @@ Transcript written on Graph.log.
 ```
 
 
+## Sorry state
 
-I wrote this just to see whether it'd work and be worth doing, and a decade ago, and was restructured a few times so some codepaths are obscurely structured, so it's going to be messy.
+I'm putting it here mainly in case other people have a use for it.
 
-I'm putting it here to see if other people have a use for it. If so, you probably want to use it for inspiration and not would _not_ want to adopt this into other software as-is.
+At the time, I wrote this just to see whether it would be worth doing, and it has been restructured a few times so some codepaths are obscure and possibly wrong, and the matching is certainly incomplete, and the responsibility of splitting between messages may need to be clearer.
 
-
-In particular, the splitting between messages needs a cleaner responsibility.
-
-
+Sure it works, but I'm saying that you would _not_ want to adopt this into other software as-is, you would probably just use it for inspiration for better code.
 
 
-Use as a pipe on latex/pdflatex's output, so e.g.:
-    latex foo.tex | colorlatex
+##Use
+
+Reads from stdin, so use it a pipe on latex/pdflatex's output, e.g.:
+    pdflatex foo.tex | colorlatex
+
 
 ## arguments
 
@@ -126,7 +127,7 @@ Options:
    -u, -U   Suppress/show unknown messages                  (default: show)
    -a, -A   Suppress/show everything (can be combined)      (default: show)
 
-   By default, only non-common hints are shown.
+   By default, only non-common hints are shown (e.g. not hbox stuff)
    -d       Suppress all hints
    -e       Show all hints
 
