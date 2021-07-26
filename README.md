@@ -109,6 +109,8 @@ At the time, I wrote this just to see whether it would be worth doing, and it ha
 
 Sure it works, but I'm saying that you would _not_ want to adopt this into other software as-is, you would probably just use it for inspiration for better code.
 
+It was also written a decade ago so needs to be told about some new common messages.
+
 
 ##Use
 
