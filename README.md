@@ -1,11 +1,11 @@
 # latexcolor
 
-This was an attempt to make latex/pdflatex's ouput readable enough that _I would actually read it_.
+This was an attempt to make latex/pdflatex's ouput succinct enough that _I would actually read it_.
 
 - Categorizes messges into initialisation, verbosity, typesetting, warnings/errors, basic messages, and unknown
 - by default surpresses initialisation and verbosity 
 - tries to be smart about splitting when multiple messages are on one line
-- presents each message on its own line, with the page number it's on  (this can be off by one, but is still uesful)
+- presents each message on its own line, with the page number it's on  (this can be off by one, but is still useful)
 
 
 So it shows:
@@ -101,7 +101,7 @@ Transcript written on Graph.log.
 ```
 
 
-## Sorry state
+## sorry state
 
 I'm putting it here mainly in case other people have a use for it.
 
@@ -109,11 +109,17 @@ At the time, I wrote this just to see whether it would be worth doing, and it ha
 
 Sure it works, but I'm saying that you would _not_ want to adopt this into other software as-is, you would probably just use it for inspiration for better code.
 
+It was also written a decade ago so needs to be told about some new common messages.
+
 
 ##Use
 
 Reads from stdin, so use it a pipe on latex/pdflatex's output, e.g.:
+```
     pdflatex foo.tex | colorlatex
+```
+
+You might like -V to get things like images and bib stuff mentioned.
 
 
 ## arguments
