@@ -8,7 +8,7 @@ This was an attempt to make latex/pdflatex's ouput succinct enough that _I would
 - presents each message on its own line, with the page number it's on  (this can be off by one, but is still useful)
 
 
-So it shows:
+So by default it shows:
 
 ![simpler output](/screenshots/simpler.png?raw=true)
 
