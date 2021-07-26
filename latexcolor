@@ -1,0 +1,640 @@
+#!/usr/bin/python
+# Note: 28pt is about 1cm
+
+import os
+import sys
+import re
+import getopt
+
+def usage():
+    print( """Classifies LaTeX output lines, colors them, and hides them according to parameters.
+
+Use as a pipe on latex/pdflatex's output, so e.g.:
+   latex foo.tex | colorlatex 
+
+Options:
+   -i, -I   Suppress/show initialisation, package imports   (default: suppress)
+   -v, -V   Suppress/show verbose details                   (default: suppress)
+   -m, -M   Suppress/show basic messages                    (default: show)
+   -t, -T   Suppress/show typesetting remarks               (default: show)
+   -w, -W   Suppress/show warning and error messages        (default: show)
+   -u, -U   Suppress/show unknown messages                  (default: show)
+   -a, -A   Suppress/show everything (can be combined)      (default: show)
+
+   By default, only non-common hints are shown.
+   -d       Suppress all hints
+   -e       Show all hints 
+
+   -c, -C   Suppress, force color output      (default: guess color support by term type)
+   -l       Suppress page numbers in output
+   -D       show message type in output (mostly for debug)
+
+   -h       Show this help
+""" )
+
+
+# Pretty colors. Well, sort of.
+BRIGHT       = '\x1b[1m'
+NOCOLOR      = '\x1b[0m'
+UNDERLINE    = '\x1b[4m'
+#
+BLACK        = '\x1b[30m'
+RED          = '\x1b[31m'
+BRIGHTRED    = '\x1b[1;31m'
+GREEN        = '\x1b[32m'
+BRIGHTGREEN  = '\x1b[1;32m'
+YELLOW       = '\x1b[33m'
+ORANGE       = YELLOW      
+BRIGHTYELLOW = '\x1b[1;33m'
+BLUE         = '\x1b[34m'
+BRIGHTBLUE   = '\x1b[1;34m'
+MAGENTA      = '\x1b[35m'
+BRIGHTMAGENTA= '\x1b[1;35m'
+CYAN         = '\x1b[36m'
+BRIGHTCYAN   = '\x1b[1;36m'
+GREY         = '\x1b[37m'
+BRIGHTGREY   = '\x1b[1;37m'
+WHITE        = BRIGHTGREY
+DEFAULT      = '\x1b[39m'
+#
+BLACKONWHITE = '\x1b[30;47m'
+
+
+
+### Settings
+
+# some defaults
+rjust           = 6
+showhints       = True
+showtypes       = False
+showcommonhints = False
+showlines       = True
+msgtypes = { # type, whether they are shown by default, and with what color they are shown
+    'U':[True,NOCOLOR,NOCOLOR],      # Things I haven't seen. Give us your logs and we'll add.         ('unknown')
+    'I':[False,BRIGHTBLUE,NOCOLOR],  # TeX initialisation, technical and rarelty worth reading at all  ('init')
+    'M':[True,GREEN,NOCOLOR],        # Messages you probably want to see                               ('message') 
+    'V':[False,BRIGHTGREEN,NOCOLOR], # Message details you probably do not want to see                 ('verbose message')
+    'T':[True,CYAN,NOCOLOR],         # Hboxes, vboxes, possibly ever more.                             ('typesetting') 
+    'W':[True,YELLOW,NOCOLOR],       # Warnings, errors.
+}
+# How to highlight high bytes:
+hexb = BLACKONWHITE
+hexa = DEFAULT
+
+# Don't use colors if the terminal isn't likely to support it. Settings may override this.
+TERM=os.environ['TERM'] #See whether we are in something that supports colors (or may absorb the escapes)
+if TERM.find('screen')!=-1 or TERM.find('xterm')!=-1 or TERM.find('rxvt')!=-1 or TERM.find('color')!=-1:
+    colors=True
+else:
+    colors=False
+
+
+# Command line argument parsing
+try:
+    opts, args = getopt.getopt(sys.argv[1:], "mvituwMVITUWaAhcCldeD", ['--help',])
+    for o, a in opts:
+        if o=='-m':            msgtypes['M'][0] = False
+        elif o=='-M':          msgtypes['M'][0] = True
+        elif o=='-v':          msgtypes['V'][0] = False
+        elif o=='-V':          msgtypes['V'][0] = True
+        elif o=='-i':          msgtypes['I'][0] = False
+        elif o=='-I':          msgtypes['I'][0] = True
+        elif o=='-t':          msgtypes['T'][0] = False
+        elif o=='-T':          msgtypes['T'][0] = True
+        elif o=='-w':          msgtypes['W'][0] = False
+        elif o=='-W':          msgtypes['W'][0] = True
+        elif o=='-u':          msgtypes['U'][0] = False
+        elif o=='-U':          msgtypes['U'][0] = True
+        elif o=='-l':          showlines        = False
+        elif o=='-c':          colors           = False
+        elif o=='-C':          colors           = True
+        elif o=='-d':          showhints        = False
+        elif o=='-D':          showtypes        = True
+        elif o=='-e':
+            showhints=True
+            showcommonhints=True
+        elif o=='-a':
+            for k in msgtypes:
+                msgtypes[k][0]=False
+        elif o=='-A':
+            for k in msgtypes:
+                msgtypes[k][0]=True
+        elif o in ('-h','--help'):
+            usage()
+            sys.exit(2)
+except getopt.GetoptError as e:
+    print( "Problem with command line arguments: %s\n"%e.msg )
+    usage()
+    sys.exit(2)
+
+
+if not colors: #If colors are disabled, clear strings that contain them
+    hexb,hexa='',''
+    for k in msgtypes:
+        msgtypes[k][1]=''
+        msgtypes[k][2]=''
+
+
+
+
+
+
+
+
+### Helpers and a few globals, accessed while working
+line, curpage = '',0
+hints         = [] #collects hints
+
+rePage        = re.compile(r'\[([1-9][0-9]*)')   # Page number markers
+reHighBytes   = re.compile('([\x80-\xff])') # Probably non-printable bytes and possibly for different encodings, so show them safely
+
+
+# readline contains what we have consumed from input, but not dealt with yet.
+# getline() returns stuff from readline before it reads more input
+# this makes it easier to deal with multiple things on a line,  by letting specific parsing parts decide 
+#  "that doesn't belong to the current message, let the next attempted match deal with it"
+
+linestack = []
+
+def getline(hack=False):
+    """See notes above of the line stack.
+    
+       If hack==False (default), there will not be a \n at the end.
+       If hack==True, an '\n' is added to keep the non-last test (that you usually use on stdin) valid
+    """
+    if len(linestack)>0:
+        add=''
+        if hack:
+            add='\n'
+        return (linestack.pop()+add)
+    else:
+        ret=sys.stdin.readline()
+        if ret==None:
+            raise Exception("readline returned None!")
+        if not hack:
+            ret=ret.rstrip('\r\n')
+        return ret
+    #lstrip: end of page number marker. We don't actually bracket-balance that one.
+    
+def pushline(line):
+    ''' If we read a line that actually contained multiple things, code can push back what it did not handle this time. '''
+    linestack.append(line)
+
+
+
+
+def show(text, type='U'):
+    ''' a wrapper around printing, that handles colors and filtering of message types '''
+    if type not in msgtypes:
+        type='U'
+    show,before,after = msgtypes[type]
+    before            = NOCOLOR+before
+
+    if show:
+        #Show any high bits less-style:
+        bits = reHighBytes.split(text)
+        for i in range(1,len(bits),2):
+            bits[i]="%s<%s>%s"%(hexb,bits[i].encode('hex_codec'),before)
+        text=''.join(bits)
+
+        lp=''
+        if showlines:
+            lp=('[%s]'%curpage).rjust(rjust)+'  '
+        if showtypes:
+            print( '%s%s%s%s%s'%(type, lp, before,text,after))
+        else:
+            print( '%s%s%s%s'%(lp,before,text,after))
+
+
+
+### Main
+if showlines:
+    print( "Page".rjust(rjust) )
+
+while True:
+    # As much as possible, each block below should set line to what was left - in case multiple things appear on a line.
+    line=line.strip()
+
+    #Did we exhaust the last line? Then get something new.
+    if len(line)==0:
+        line = getline(hack=True)
+        if len(line)==0: #No more input
+            break
+        line=line.rstrip('\r\n').lstrip('] ') #space because things use startswith, ] because there may be a leftover from 
+
+
+
+    # 'Moving on to next page' markers. May have things before and after it (including other page markers).
+    # This is one part of the reason for the line stack.
+    # Note that a page marker technically contains things, but we treat them as if they came after.
+    pg=rePage.search(line)
+    if pg:
+        # Is there anything before? If so, push that, then push the marker, and push the text after it, on to the line stack
+        #  then continue so that each of them will be dealt with individually
+        before = line[:pg.start()]
+        if len(before)>0:
+            pushline(line[pg.end()+1:])
+            pushline(line[pg.start():pg.end()])
+            pushline(before)
+            line=''
+            continue
+        else: # alone (quite possibly because of the above split in a recent loop)
+            curpage=int( pg.groups()[0] ) #set current page (so that it can be shown)
+            #show('','M')
+            pushline(line[pg.end()+1:])
+            line=''
+            continue
+
+    # Warnings
+    if (line.find('arning: ')!=-1 or line.find('rror: ')!=-1 or
+        line.find('pdfTeX warning')!=-1 or  #pdfTeX
+        line.find('arning--')!=-1 ):        #BibTeX
+        line=line.replace('LaTeX Font Warning:','Warning:').replace('LaTeX Warning:','Warning:').lstrip('! ')
+
+        if line.find('Unused global option(s)')!=-1: #I haven't seen this produce more than one option
+            while line.find('.')==-1:            #but I'm guessing this works 
+                line+=getline()
+
+        if line.find('Float too large for page'):
+            hints.append('floattoolarge')
+
+        if line.find('pdflatex')!=-1 or line.find('pdfTeX')!=-1: #These may be partly be on the next line. Pull it in
+            nextline = getline()
+            if (nextline.find('allowed')!=-1 or
+                nextline.find("can't handle")!=-1 or
+                nextline.find('gnoring it')!=-1 or
+                nextline.find('font file missing')!=-1 or
+                nextline.find('can be used only with embedded')!=-1 or
+                nextline.find('fixed one')!=-1):
+                line=("%s%s"%(line,nextline)).replace('\n',' ').replace('  ',' ')
+                show(line,'W')
+                if line.find('Page Group')!=-1:
+                    hints.append('pdfpagegroup')
+                elif line.find('at most version')!=-1:
+                    hints.append('pdfincludeversion')
+                line=''
+                continue
+            else:
+                show(line,'W')
+                #pushline(nextline)
+                line=nextline
+                continue
+
+        elif line.find('Citation'):
+            nextline = getline()
+            if nextline.find('line ')!=-1 or len(nextline)<8: #ish. Depends on where it's broken.
+                show(line+nextline,'W')
+                line=''
+                continue                
+            else:
+                show(line,'W')
+                #pushline(nextline)
+                line=nextline
+                continue
+            
+        else: #No special handling
+            show(line,'W')
+            line=''
+            continue
+
+
+    # We all know this nessage :)
+    if line.startswith('Underfull') or line.startswith('Overfull'):
+        #There seem to be varying ways this can output. Oy.
+        #I've seen it span up to four lines (the last being just [])
+        addedlines=0
+        while True:
+            if addedlines>=4:
+                break #hard limit. Might as well.
+            
+            nextline=getline()
+            if re.search(r'(/[a-z0-9-]{3,15}/|\OT1|\OMS)',nextline)!=None: #font details, which are likely to be part of the complaint
+                line+=nextline
+                addedlines+=1
+                continue           
+            if ((len(nextline)>0 and nextline[0] in '<{\\') or #This should be gratuitously safe - needs more work.
+                (nextline.startswith('Underfull') or nextline.startswith('Overfull')) or
+                (re.search('(\[[0-9])',nextline)!=None)
+                ): #then it's fairly certainly unrelated; put it back and process what we have
+                pushline(nextline)
+                break
+            if len(nextline.replace('[]','').strip())==0: # just one or two []s, which seems to commonly terminate.
+                #That also makes that line was ignorable (note it's implicitly thrown away)
+                break
+            if nextline.count('-')>=5: #likely a heavily hyphenated example
+                line+=nextline
+                addedlines+=1
+                continue
+            #implied else, which is unsure. 
+            if False: #We can either be safe and assume it is unrelated:
+                pushline(nextline)
+                break
+            else: # or stick it on too. The 'something else' detection above better be good if we do this.
+                line+=nextline
+                addedlines+=1
+                continue                
+
+
+        if line.find(r'\hbox')!=-1:
+            hints.append('hbox')
+
+            #Take out that unreadable font bit and any other nonsense
+            line = re.sub('[\ ]?(?:\\\\OT1|\\\\OMS)?/[^\\ ]{6,}',', ',line.replace('[]',' '))
+            
+            show('Typesetting: %s'%line,'T')
+            line=''
+            continue
+        
+        else: #\vbox
+            now=line
+            if line.find('active'):
+                now=line[:line.find('active')+6]
+                line=line[line.find('active')+6:].lstrip()
+            else:
+                line=''
+            show('Layouting: %s'%now,'T')
+            continue
+
+
+    ### Bracket things
+        
+    if line.startswith('<') or line.startswith('{') or line.startswith('('):
+        #If the closing brace is on the next line, it joins it to the current one.
+        # (In a few cases it'll come lines later. We could require balancing, but like
+        #  with the page markers, there may be interesting things in here so we
+        #  will pretend the nested things are separate)
+        for open,close in (('{','}'),('<','>')):
+            if line.startswith(open):
+                if line.find(close)==-1: #If it's not here, it must be next.
+                    nextline = getline()
+                    if nextline.find(close)==-1: # It's not? (it can happen)? Oh well, then.
+                        pushline(nextline) #put the next line back. 
+                        #show(line,'U') What to do with the current one - ignore?
+                        line=''
+                        continue
+                    else: #it is. Add it.
+                        line=line+nextline 
+
+
+        if line.startswith('<'):
+            if line.find('>')==-1: #Not on this line. Must be on the next line.
+                nextline = getline()
+                if nextline.find('>')==-1: # It's not? (it can happen)? Oh well, then.
+                    pushline(nextline) #put the next line back
+                else: #it is. Add it.
+                    line=line+nextline 
+
+            next = line[line.find('>')+1:].strip() #leftovers: do that next time
+            if len(next)>0:
+                pushline(next) 
+            line = line[:line.find('>')+1].strip() #what to handle now
+            if len(line)==0:
+                continue
+
+            if line.startswith('<*>'):
+                show(line,'W')
+            elif line.startswith('</usr') or line.startswith('</var'):
+                show(line[:line.find('>')+1],'I')
+            elif line.startswith('<use '): 
+                show('Image: %s'%line[:line.find('>')+1],'V')
+            elif line.startswith('<') and line.find('pt>')!=-1:
+                show('Image: %s'%line[:line.find('pt>')+3],'M')
+            elif line.find('page is rotated 90 degrees')!=-1:
+                show('Image: %s'%line,'V')                               
+            elif line.find('PNG copy')!=-1:
+                show('Image: %s'%line,'V')               
+            elif line.find('.pdf>')!=-1 or line.find('.ps>')!=-1:                
+                show('Image: %s'%line,'V')
+            elif line.find('.pfb>')!=-1:
+                show('Image: %s'%line,'V')
+            else:
+                show(line)
+            line='' #Always consume
+            continue
+
+        if line.startswith('{'):
+            if line.startswith('{/us') or line.startswith('{/va'):
+                if line.find('}')!=-1:
+                    show(line[:line.find('}')+1],'I')
+                    line=line[line.find('}')+1:].strip()
+                    continue
+                else:
+                    line=line+getline() # basically assuming brackets balance
+                    continue
+
+        if line.startswith('('):
+            if line.startswith('(/us') or line.startswith('(/va'):
+                if line.find(')')!=-1:
+                    show(line[:line.find(')')+1],'I')
+                    line=line[line.find(')')+1:].strip()
+                    continue
+                else:
+                    line=line+getline() # basically assuming brackets balance
+                    continue
+
+
+                
+    #All that package loading
+    #Actually, the whole things is a tree that roots in your document,
+    # but we ignore that level since they don't start with /usr/share/texmf
+    #This also means the logic can be 'keep adding lines until the brackets balance'
+    
+    if line.find('.aux) (')!=-1: #A little cheating first: Something's after the document's aux.
+        pushline(line[:line.find('.aux) (')+5])         #separate itL
+        pushline(line[line.find('.aux) (')+5:].lstrip('] ')) #Shove it onto the next line
+        line=''
+        continue
+
+    if line.startswith('(/usr/share/texmf') or line.startswith('(C:\\texmf\\'):
+        while line.count('(')-line.count(')')!=0: 
+            line+=' '+getline()
+        show(line[:line.rfind(')')],'I')
+        line=line[line.rfind(')')+1:].strip()
+        continue
+
+
+
+    ### Relatively common messages
+
+    #Some stray and fairly constant messages
+    if (line.find('entering')!=-1 and line.find('mode')!=-1)  or  (line.find('This is')!=-1 and line.find('TeX')!=-1):
+        show(line,'V')
+        line=''
+        continue
+
+    #Put the babel thing on a single line
+    if line.startswith('Babel') and line.find('hyphenation patterns')!=-1:
+        while line.find('loaded')==-1:
+            line+=getline()                
+        show(line,'I')
+        line=''
+        continue
+
+
+
+    ### Common substrings to look for
+    for constantmsg,typ,hint in (('Non-PDF special ignored!',                             'M', 'nonpdfspecial'),
+                                 ('(see the transcript file for additional information)', 'V', None)
+                            ):
+        if line.startswith(constantmsg):
+            if hint!=None:
+                hints.append(hint)
+            show(constantmsg,typ)
+            line=line[len(constantmsg):]
+            continue
+
+
+    #One-liner messages starting with...
+    for oneliner,typ in (('LaTeX2e','V'),
+                         ('Document Class','V'),
+                         ('Output written on','V'),
+                         ('Transcript written on','V'),
+                         ('LaTeX Font Info','V'),
+                         ('LaTeX Info','M'),
+                         ('(./','V'),  #Likely references to your own document
+                         ('Package','M'),
+                         ('Missing character','M'),
+                         ('(Font)','V'),
+#                         ('---','V'),
+                         ('**','V'), #Document mention, some comments
+                         ('-----------','V'),                         
+                         #Geometry details (some may overaccept somewhat)
+                         ('paper: ','V'),
+                         ('landscape: ','V'),
+                         ('twocolumn: ','V'),
+                         ('twoside: ','V'),
+                         ('asymmetric: ','V'),
+                         ('h-parts: ','V'),
+                         ('v-parts: ','V'),
+                         ('hmarginratio: ','V'),
+                         ('vmarginratio: ','V'),
+                         ('lines: ','V'),
+                         ('heightrounded: ','V'),
+                         ('bindingoffset: ','V'),
+                         ('truedimen: ','V'),
+                         ('includehead: ','V'),
+                         ('includefoot: ','V'),
+                         ('includemp: ','V'),
+                         ('driver: ','V'),
+                         ('(1in=72.27pt, 1cm=28.45pt)','V'), #...I'm glad you cleared that up:)
+
+                         ('End of file on the terminal!','W'),
+                         ('No pages of output.','W'),
+                         ('! Emergency stop.','W'),
+
+                         #fancyhdr:  
+                         ('Make it at least','W'),
+                         ('We now make it that large for the rest of the document.','W'),
+                         ('This may cause the page layout to be inconsistent, however','W'),                         
+                         ('\openout','V'), #things opening other things
+                         ('\\tf@toc=','V'), #No idea
+
+                         #...I'm starting to think we need a more explicit message-on-a-few-lines-joiner
+                         # 'these phrases should be on one line' type logic.
+
+                         #BibTeX
+                         ('The style file','V'),
+                         ('Database file','M'),
+                         ('(There were','M'), #n warnings
+                         ):
+        if line.startswith(oneliner):
+            show(line,typ)
+            line=''
+            continue
+
+
+    #Consume lines based on substrings (be sure they are not the type to be written inline!)
+    for part,typ in (('Copyright','I'),
+                     ('Package:','I'),
+                     ('psfonts','I'),
+                     ('hyperref using driver','I'),
+                     ('EveryShipout initializing macros','I'),                     
+                     
+                     ('Here is how much of TeX','V'),
+                     ('strings out of','V'),
+                     ('string characters out of','V'),
+                     ('words of memory out of','V'),
+                     ('multiletter control sequences out of','V'),
+                     ('words of font info for','V'),
+                     ('hyphenation exceptions out of','V'),
+                     ('stack positions out of','V'),
+                     ('PDF statistics:','V'),
+                     ('PDF objects out of','V'),
+                     ('named destinations out of','V'),
+                     ('words of extra memory for PDF output out of','V'),
+
+                     ('tried instead on input line','M'), #V or M?
+                     ('Graphic file (type ','V'),
+                     #('Standard LaTeX file','V'),                         
+                     #('Standard LaTeX document class','V'),
+                     #Not entirely sure about these
+                     
+                     ('.tex','M'),
+                     ('.bbl','V'), #bib.
+                     ('.toc','V'),
+                     ('.aux','V'),
+                     ('.enc','V'),
+                    
+                     ):
+        if line.find(part)!=-1:
+            show(line,typ)
+            line=''
+            continue
+
+
+
+    #Don't know what it is: Show and move on.
+    if len(line.lstrip('[]>)}. '))==0: #just leftovers?
+        line=''
+        continue
+    else:
+        stripmuck=line.lstrip(']>)}. ').strip()
+        if stripmuck[:1] in '<{':
+            line=stripmuck            #maybe we made it aaaaall better.
+            continue        
+        if line[0]=='\\':
+            show(line,type='V') #Probably some value report or such
+            line=''
+            continue
+        else:
+            show(line,type='U')
+            line=''
+            continue
+    
+
+
+### Show collected hints?
+
+if showhints: #Show each hint once, in the order they occurred.
+    shown=[]
+    for hint in hints:
+        if hint not in shown:
+            shown.append(hint)
+            if hint=='hbox' and showcommonhints:
+                print( "" )
+                print( "[HINT]  Overfull and underfull hbox messages ususally come from TeX's perfectionistic word" )
+                print( "        spacing and line breaking logic. With badness values under 10000 this is rarely visually problematic." )
+                print( "        You can make TeX \sloppy about the spaces." )
+                print( "        If TeX doesn't know how to hyphenate a word, you can tell it, eiter in the prelude:" )
+                print( "        \hyphenation{man-u-script}, or inline: man\-u\-script. " )
+                print( "        Using the [draft] document option highlights the places the hbox/vbox trouble happens." )
+            elif hint=='nonpdfspecial' and showcommonhints:
+                print( "")
+                print( "[HINT]  'Non-PDF special ignored' means the PDF processor is ignoring some commands not meant for it,")
+                print( "        and is usually not problematic. Likely culprits are packages like pstricks (try pdftricks), color,")
+                print( "        graphics, and hyperref. You can tell various packages to use their pdftex driver.")
+            elif hint=='pdfpagegroup':
+                print( "" )
+                print( "[HINT]  The Page Group warning tells you the included PDF image seems to have multiple pages" )
+                print( "        (which is occasionally nonsense),  but only the first one will be displayed." )
+                print( "        If you meant to include multiple pages from a PDF document, look at the pdfpages package." )
+            elif hint=='pdfincludeversion' and showcommonhints:
+                print( "")
+                print( "[HINT]  Complaints about inclusion of too-new PDF versions only matters when you actually use new," )
+                print( "        PDF-specific features in those files. If they are simple images (particularly if converted from" )
+                print( "        postscript) you can probably ignore this." )
+            elif hint=='floattoolarge' and showcommonhints:
+                pass #it this obvious enough?
+                # Usually an image or table that is too high. A caption can be the cause.
+            
+    print( "" )
