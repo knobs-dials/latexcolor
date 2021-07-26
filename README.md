@@ -115,7 +115,11 @@ It was also written a decade ago so needs to be told about some new common messa
 ##Use
 
 Reads from stdin, so use it a pipe on latex/pdflatex's output, e.g.:
+```
     pdflatex foo.tex | colorlatex
+```
+
+You might like -V to get things like images and bib stuff mentioned.
 
 
 ## arguments
