@@ -1,6 +1,4 @@
-#!/usr/bin/python
-# Note: 28pt is about 1cm
-
+#!/usr/bin/python2
 import os
 import sys
 import re
@@ -78,15 +76,15 @@ msgtypes = { # type, whether they are shown by default, and with what color they
     'W':[True,YELLOW,NOCOLOR],       # Warnings, errors.
 }
 # How to highlight high bytes:
-hexb = BLACKONWHITE
-hexa = DEFAULT
+hexb            = BLACKONWHITE
+hexa            = DEFAULT
 
 # Don't use colors if the terminal isn't likely to support it. Settings may override this.
 TERM=os.environ['TERM'] #See whether we are in something that supports colors (or may absorb the escapes)
 if TERM.find('screen')!=-1 or TERM.find('xterm')!=-1 or TERM.find('rxvt')!=-1 or TERM.find('color')!=-1:
-    colors=True
+    colors = True
 else:
-    colors=False
+    colors = False
 
 
 # Command line argument parsing
@@ -129,10 +127,10 @@ except getopt.GetoptError as e:
 
 
 if not colors: #If colors are disabled, clear strings that contain them
-    hexb,hexa='',''
+    hexb, hexa = '', ''
     for k in msgtypes:
-        msgtypes[k][1]=''
-        msgtypes[k][2]=''
+        msgtypes[k][1] = ''
+        msgtypes[k][2] = ''
 
 
 
@@ -142,17 +140,17 @@ if not colors: #If colors are disabled, clear strings that contain them
 
 
 ### Helpers and a few globals, accessed while working
-line, curpage = '',0
+line, curpage = '', 0  # page 0 basically indicates init stuff 
 hints         = [] #collects hints
 
-rePage        = re.compile(r'\[([1-9][0-9]*)')   # Page number markers
-reHighBytes   = re.compile('([\x80-\xff])') # Probably non-printable bytes and possibly for different encodings, so show them safely
+rePage        = re.compile(r'\[([1-9][0-9]*)') # Page number markers
+reHighBytes   = re.compile('([\x80-\xff])')    # Probably non-printable bytes and possibly for different encodings, so show them safely
 
 
-# readline contains what we have consumed from input, but not dealt with yet.
-# getline() returns stuff from readline before it reads more input
-# this makes it easier to deal with multiple things on a line,  by letting specific parsing parts decide 
-#  "that doesn't belong to the current message, let the next attempted match deal with it"
+# linestack contains what we have consumed from input, but not dealt with yet,
+#   getline() returns stuff from readline before it reads more input.
+# This makes it easier to deal with multiple things on a line, by letting specific parsing decide 
+#  "that doesn't belong to the current message, put it back and let the next attempted match deal with it"
 
 linestack = []
 
@@ -211,9 +209,10 @@ def show(text, type='U'):
 if showlines:
     print( "Page".rjust(rjust) )
 
+
 while True:
     # As much as possible, each block below should set line to what was left - in case multiple things appear on a line.
-    line=line.strip()
+    line = line.strip()
 
     #Did we exhaust the last line? Then get something new.
     if len(line)==0:
@@ -223,11 +222,10 @@ while True:
         line=line.rstrip('\r\n').lstrip('] ') #space because things use startswith, ] because there may be a leftover from 
 
 
-
     # 'Moving on to next page' markers. May have things before and after it (including other page markers).
     # This is one part of the reason for the line stack.
     # Note that a page marker technically contains things, but we treat them as if they came after.
-    pg=rePage.search(line)
+    pg = rePage.search(line)
     if pg:
         # Is there anything before? If so, push that, then push the marker, and push the text after it, on to the line stack
         #  then continue so that each of them will be dealt with individually
@@ -239,17 +237,20 @@ while True:
             line=''
             continue
         else: # alone (quite possibly because of the above split in a recent loop)
-            curpage=int( pg.groups()[0] ) #set current page (so that it can be shown)
+            curpage = int( pg.groups()[0] ) #set current page (so that it can be shown)
             #show('','M')
             pushline(line[pg.end()+1:])
             line=''
             continue
 
-    # Warnings
+    # Warnings (that are explicitly mentioned as such)
     if (line.find('arning: ')!=-1 or line.find('rror: ')!=-1 or
         line.find('pdfTeX warning')!=-1 or  #pdfTeX
         line.find('arning--')!=-1 ):        #BibTeX
-        line=line.replace('LaTeX Font Warning:','Warning:').replace('LaTeX Warning:','Warning:').lstrip('! ')
+
+        # simplify
+        line = line.replace('LaTeX Font Warning:','Warning:').replace('LaTeX Warning:','Warning:')
+        line = line.lstrip('! ')
 
         if line.find('Unused global option(s)')!=-1: #I haven't seen this produce more than one option
             while line.find('.')==-1:            #but I'm guessing this works 
@@ -272,19 +273,19 @@ while True:
                     hints.append('pdfpagegroup')
                 elif line.find('at most version')!=-1:
                     hints.append('pdfincludeversion')
-                line=''
+                line = ''
                 continue
             else:
                 show(line,'W')
                 #pushline(nextline)
-                line=nextline
+                line = nextline
                 continue
 
         elif line.find('Citation'):
             nextline = getline()
             if nextline.find('line ')!=-1 or len(nextline)<8: #ish. Depends on where it's broken.
                 show(line+nextline,'W')
-                line=''
+                line = ''
                 continue                
             else:
                 show(line,'W')
@@ -307,7 +308,7 @@ while True:
             if addedlines>=4:
                 break #hard limit. Might as well.
             
-            nextline=getline()
+            nextline = getline()
             if re.search(r'(/[a-z0-9-]{3,15}/|\OT1|\OMS)',nextline)!=None: #font details, which are likely to be part of the complaint
                 line+=nextline
                 addedlines+=1
@@ -358,7 +359,7 @@ while True:
 
     ### Bracket things
         
-    if line.startswith('<') or line.startswith('{') or line.startswith('('):
+    if line.startswith('<') or line.startswith('{'):
         #If the closing brace is on the next line, it joins it to the current one.
         # (In a few cases it'll come lines later. We could require balancing, but like
         #  with the page markers, there may be interesting things in here so we
@@ -422,17 +423,6 @@ while True:
                     line=line+getline() # basically assuming brackets balance
                     continue
 
-        if line.startswith('('):
-            if line.startswith('(/us') or line.startswith('(/va'):
-                if line.find(')')!=-1:
-                    show(line[:line.find(')')+1],'I')
-                    line=line[line.find(')')+1:].strip()
-                    continue
-                else:
-                    line=line+getline() # basically assuming brackets balance
-                    continue
-
-
                 
     #All that package loading
     #Actually, the whole things is a tree that roots in your document,
@@ -445,7 +435,7 @@ while True:
         line=''
         continue
 
-    if line.startswith('(/usr/share/texmf') or line.startswith('(C:\\texmf\\'):
+    if line.startswith('(/usr/share/tex') or line.startswith('(C:\\te'):
         while line.count('(')-line.count(')')!=0: 
             line+=' '+getline()
         show(line[:line.rfind(')')],'I')
@@ -470,11 +460,17 @@ while True:
         line=''
         continue
 
+    if line.startswith('Babel') and line.find('hyphenation patterns')!=-1:
+        while line.find('loaded')==-1:
+            line+=getline()                
+        show(line,'I')
+        line=''
+        continue
 
-
-    ### Common substrings to look for
+    ### Common substrings to look for, and what hints to potentially emit for them later
     for constantmsg,typ,hint in (('Non-PDF special ignored!',                             'M', 'nonpdfspecial'),
-                                 ('(see the transcript file for additional information)', 'V', None)
+                                 ('(see the transcript file for additional information)', 'V', None),
+                                 ('restricted \write18 enabled.',                         'V', None),
                             ):
         if line.startswith(constantmsg):
             if hint!=None:
@@ -543,7 +539,7 @@ while True:
             continue
 
 
-    #Consume lines based on substrings (be sure they are not the type to be written inline!)
+    #Consume lines based on substrings (TODO: be sure they are not the type to be written inline!)
     for part,typ in (('Copyright','I'),
                      ('Package:','I'),
                      ('psfonts','I'),
@@ -570,7 +566,7 @@ while True:
                      #Not entirely sure about these
                      
                      ('.tex','M'),
-                     ('.bbl','V'), #bib.
+                     ('.bbl','V'), # bib
                      ('.toc','V'),
                      ('.aux','V'),
                      ('.enc','V'),
@@ -583,7 +579,9 @@ while True:
 
 
 
-    #Don't know what it is: Show and move on.
+    # Don't know what it is: Show as unknown, move on. 
+    # Yes, this might well consume other things on the same line, so developers:
+    # try to capture specific things, and probably use -DA to see where everything is going
     if len(line.lstrip('[]>)}. '))==0: #just leftovers?
         line=''
         continue
