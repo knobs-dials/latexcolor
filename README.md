@@ -101,17 +101,16 @@ Transcript written on Graph.log.
 ```
 
 
-## sorry state
+## proof of concept
 
-I'm putting it here mainly in case other people have a use for it.
+I made this just to see whether it would be worth doing,
+and am putting it here in case other people have a use for it.
 
-At the time, I wrote this just to see whether it would be worth doing. 
-
-Sure it works, but it has been restructured a few times, so some codepaths are obscure and/or wrong, the matching is certainly incomplete, and the responsibility of splitting between messages may need to be clearer.
+While it works, it has been restructured a few times, so some codepaths are obscure and/or wrong,
+the matching is certainly incomplete, and the responsibility of splitting between messages may need to be clearer.
+It was also written a decade ago so needs to be told about some new common messages.
 
 I'm saying that you would _not_ want to adopt this into other software as-is, you would probably just use it for inspiration for better code.
-
-It was also written a decade ago so needs to be told about some new common messages.
 
 
 ##Use
