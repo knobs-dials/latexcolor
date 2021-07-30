@@ -113,7 +113,7 @@ It was also written a decade ago so needs to be told about some new common messa
 I'm saying that you would _not_ want to adopt this into other software as-is, you would probably just use it for inspiration for better code.
 
 
-##Use
+## use and arguments
 
 Reads from stdin, so use it a pipe on latex/pdflatex's output, e.g.:
 ```
@@ -122,8 +122,6 @@ Reads from stdin, so use it a pipe on latex/pdflatex's output, e.g.:
 
 You might like -V to get things like images and bib stuff mentioned.
 
-
-## arguments
 
 ```
 Options:
