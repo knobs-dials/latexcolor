@@ -137,7 +137,7 @@ Options:
    -d       Suppress all hints
    -e       Show all hints
 
-   -c, -C   Suppress, force color output      (default: guess color support by term type)
+   -c, -C   Suppress/force color output      (default: guess color support by term type)
    -l       Suppress page numbers in output
    -D       show message type in output (mostly for debug)
 
