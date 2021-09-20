@@ -101,18 +101,6 @@ Transcript written on Graph.log.
 ```
 
 
-## proof of concept
-
-I made this just to see whether it would be worth doing,
-and am putting it here in case other people have a use for it.
-
-While it works, it has been restructured a few times, so some codepaths are obscure and/or wrong,
-the matching is certainly incomplete, and the responsibility of splitting between messages may need to be clearer.
-It was also written a decade ago so needs to be told about some new common messages.
-
-I'm saying that you would _not_ want to adopt this into other software as-is, you would probably just use it for inspiration for better code.
-
-
 ## use and arguments
 
 Reads from stdin, so use it a pipe on latex/pdflatex's output, e.g.:
@@ -143,3 +131,17 @@ Options:
 
    -h       Show this help
 ```
+
+## proof of concept
+
+I made this just to see whether it would be worth doing,
+and am putting it here in case other people have a use for it.
+
+While it works, it has been restructured a few times, so some codepaths are obscure and/or wrong,
+the matching is certainly incomplete, and the responsibility of splitting between messages may need to be clearer.
+It was also written a decade ago so needs to be told about some new common messages.
+
+I'm saying that you would _not_ want to adopt this into other software as-is, you would probably just use it for inspiration for better code.
+
+
+
