@@ -9,7 +9,7 @@ This was an attempt to make latex/pdflatex's ouput succinct enough that _I would
 
 
 
-For example, it shows (by default):
+For example, it shows something like:
 
 ![simpler output](/screenshots/simpler.png?raw=true)
 
